@@ -1,0 +1,51 @@
+#!/bin/sh
+
+i=0
+peerretval=0
+volumeretval=0
+
+peerstatus="`gluster peer status`"
+if [ $? -ne 0 ] ; then
+	peermsg="peer status not successful"
+	peerretval=2
+fi
+volumelist="`gluster volume list`"
+if [ $? -ne 0 ] ; then
+	volumemsg="volume list not successful"
+	volumeretval=2
+fi
+if [ $peerretval -ne 2 ] ; then
+	numofpeers="`echo \"$peerstatus\" | sed -n 's/Number of Peers: \([0-9]*\)/\1/p'`"
+	if ! [ "$numofpeers" -eq "$numofpeers" ] 2>/dev/null ; then
+		peermsg="couldn't get number of peers"
+		peerretval=3
+	elif [ `echo "$peerstatus" | grep -c "State: Peer in Cluster (Connected)"` -eq $numofpeers ] ; then
+		peermsg="all peers connected"
+		peerretval=0
+	else
+		peermsg="some peers disconnected"
+		peerretval=2
+	fi
+fi	
+if [ $volumeretval -ne 2 ] ; then
+	for volume in $volumelist ; do
+		mount | grep -q ":$volume on .* type fuse.glusterfs " || let i++
+	done
+	if [ $i -eq 0 ] ; then
+		volumemsg="all volumes connected"
+		volumeretval=0
+	else
+		volumemsg="some volumes disconnected"
+		volumeretval=2
+	fi
+fi
+if [ $peerretval -eq 2 -o $volumeretval -eq 2 ] ; then
+	echo CRITICAL - $peermsg, $volumemsg
+	exit 2
+elif [ $peerretval -eq 0 -a $volumeretval -eq 0 ] ; then
+	echo OK - $peermsg, $volumemsg
+	exit 0
+elif [ $peerretval -eq 3 ] ; then
+	echo UNKNOWN - $peermsg, $volumemsg
+	exit 3
+fi
