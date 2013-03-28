@@ -1,6 +1,7 @@
 #!/bin/sh
 
 i=0
+j=0
 peerretval=0
 volumeretval=0
 
@@ -38,14 +39,27 @@ if [ $volumeretval -ne 2 ] ; then
 		volumemsg="some volumes disconnected"
 		volumeretval=2
 	fi
+	for volume in $volumelist ; do
+		[ `gluster volume heal $volume info 2>/dev/null | grep "^Number of entries: " | grep -v "^Number of entries: 0$" | wc -l` -gt 0 ] && let j++
+	done
+	if [ $j -eq 0 ] ; then
+		healmsg="all volumes apparently clean"
+		healretval=0
+	else
+		healmsg="some volumes dirty"
+		healretval=1
+	fi
 fi
 if [ $peerretval -eq 2 -o $volumeretval -eq 2 ] ; then
-	echo CRITICAL - $peermsg, $volumemsg
+	echo CRITICAL - $peermsg, $volumemsg, $healmsg
 	exit 2
-elif [ $peerretval -eq 0 -a $volumeretval -eq 0 ] ; then
-	echo OK - $peermsg, $volumemsg
+elif [ $peerretval -eq 0 -a $volumeretval -eq 0 -a $healretval -eq 1 ] ; then
+	echo WARNING - $peermsg, $volumemsg, $healmsg
+	exit 1
+elif [ $peerretval -eq 0 -a $volumeretval -eq 0 -a $healretval -eq 0 ] ; then
+	echo OK - $peermsg, $volumemsg, $healmsg
 	exit 0
 elif [ $peerretval -eq 3 ] ; then
-	echo UNKNOWN - $peermsg, $volumemsg
+	echo UNKNOWN - $peermsg, $volumemsg, $healmsg
 	exit 3
 fi
